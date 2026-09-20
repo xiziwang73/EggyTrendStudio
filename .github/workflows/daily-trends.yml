@@ -2,29 +2,39 @@ name: Daily Trend Refresh
 
 on:
   schedule:
-    # 16:00 UTC = 00:00 Asia/Shanghai (next calendar day)
-    - cron: "0 16 * * *"
+    # 16:05 UTC = 00:05 Asia/Shanghai
+    # GitHub scheduled runs can be delayed, so this is a daily near-midnight refresh rather than a hard real-time clock.
+    - cron: "5 16 * * *"
   workflow_dispatch:
+  push:
+    paths:
+      - "scripts/update_trends.py"
+      - ".github/workflows/daily-trends.yml"
 
 permissions:
   contents: write
 
+concurrency:
+  group: daily-trends-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   update-trends:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install requests beautifulsoup4
+        run: pip install requests
 
-      - name: Collect previous day trends
+      - name: Collect daily trends
         run: python scripts/update_trends.py
 
       - name: Commit updated trend data
@@ -36,5 +46,6 @@ jobs:
             echo "No trend changes to commit"
           else
             git commit -m "data: refresh daily trends"
+            git pull --rebase origin main
             git push
           fi
