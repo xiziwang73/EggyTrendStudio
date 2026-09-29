@@ -34,18 +34,32 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
-      - name: Collect daily trends
+      - name: Collect daily trends and rebuild lifecycle history
         run: python scripts/update_trends.py
+
+      - name: Validate required outputs
+        run: |
+          test -s data/latest.json
+          test -s data/history.json
+          python - <<'PY'
+          import json
+          latest=json.load(open('data/latest.json',encoding='utf-8'))
+          history=json.load(open('data/history.json',encoding='utf-8'))
+          assert latest.get('items'), 'latest.json has no items'
+          assert history.get('archive_days',0) >= 1, 'history archive_days missing'
+          assert history.get('topics'), 'history.json has no topics'
+          print('validated', len(latest['items']), 'latest items and', len(history['topics']), 'history topics')
+          PY
 
       - name: Commit updated trend data
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/latest.json data/archive/
+          git add data/latest.json data/history.json data/archive/
           if git diff --cached --quiet; then
             echo "No trend changes to commit"
           else
-            git commit -m "data: refresh daily trends"
+            git commit -m "data: refresh trends and lifecycle history"
             git pull --rebase origin main
             git push
           fi
